@@ -1,0 +1,47 @@
+[project]
+name = "lead-generation-sales-automation"
+version = "0.1.0"
+description = "Production-ready sales automation backend with PostgreSQL, SQLAlchemy, Alembic, and OpenAI integration."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.13.2",
+    "beautifulsoup4>=4.12.3",
+    "openai>=1.40.0",
+    "pandas>=2.2.2",
+    "psycopg[binary]>=3.2.1",
+    "pydantic>=2.8.2",
+    "pydantic-settings>=2.4.0",
+    "python-dotenv>=1.0.1",
+    "python-multipart>=0.0.18",
+    "fastapi>=0.115.0",
+    "google-api-python-client>=2.140.0",
+    "google-auth>=2.33.0",
+    "google-auth-oauthlib>=1.2.1",
+    "gspread>=6.1.2",
+    "requests>=2.32.3",
+    "sqlalchemy>=2.0.32",
+    "tenacity>=8.5.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.2",
+    "ruff>=0.5.7",
+]
+
+[project.scripts]
+sales-automation = "sales_automation.cli:main"
+sales-automation-server = "sales_automation.api.main:run"
+
+[build-system]
+requires = ["setuptools>=72.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

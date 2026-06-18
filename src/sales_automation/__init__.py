@@ -1,0 +1,2 @@
+"""Sales automation application package."""
+
