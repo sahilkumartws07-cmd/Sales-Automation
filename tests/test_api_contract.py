@@ -20,7 +20,11 @@ from sales_automation.api.main import (
     draft_action,
     respond_to_reply,
 )
-from sales_automation.api.schemas import ClassifyRepliesRequest, DraftActionRequest, ReplyResponseRequest
+from sales_automation.api.schemas import (
+    ClassifyRepliesRequest,
+    DraftActionRequest,
+    ReplyResponseRequest,
+)
 from sales_automation.services.reply_classification import ReplyClassificationResult
 
 
@@ -30,6 +34,57 @@ def test_static_lead_routes_are_registered_before_dynamic_lead_route() -> None:
     assert paths.index("/leads/import") < paths.index("/leads/{lead_id}")
     assert paths.index("/leads/score") < paths.index("/leads/{lead_id}")
     assert "/notifications" in paths
+
+
+def test_rest_api_routes_use_standard_http_methods() -> None:
+    route_methods = {
+        route.path: route.methods
+        for route in app.routes
+        if getattr(route, "path", "").startswith(
+            (
+                "/auth",
+                "/drafts",
+                "/emails",
+                "/health",
+                "/leads",
+                "/logs",
+                "/notifications",
+                "/notify",
+                "/replies",
+                "/research",
+                "/sent",
+                "/sheets",
+            )
+        )
+    }
+
+    assert "GET" in route_methods["/health"]
+    assert "GET" in route_methods["/leads"]
+    assert "GET" in route_methods["/leads/{lead_id}"]
+    assert "GET" in route_methods["/drafts"]
+    assert "GET" in route_methods["/drafts/pending"]
+    assert "GET" in route_methods["/sent"]
+    assert "GET" in route_methods["/replies"]
+    assert "GET" in route_methods["/notifications"]
+    assert "GET" in route_methods["/logs"]
+
+    assert "POST" in route_methods["/auth/register"]
+    assert "POST" in route_methods["/auth/login"]
+    assert "POST" in route_methods["/auth/refresh-token"]
+    assert "POST" in route_methods["/auth/forgot-password"]
+    assert "POST" in route_methods["/leads/import"]
+    assert "POST" in route_methods["/emails/generate"]
+    assert "POST" in route_methods["/replies/classify"]
+    assert "POST" in route_methods["/replies/{reply_id}/respond"]
+    assert "POST" in route_methods["/sheets/log/{lead_id}"]
+    assert "POST" in route_methods["/notify/slack/test"]
+
+    assert "POST" in route_methods["/auth/verify-otp"]
+    assert "POST" in route_methods["/auth/reset-password"]
+    assert "POST" in route_methods["/leads/score"]
+    assert "POST" in route_methods["/research/websites"]
+    assert "PUT" in route_methods["/drafts/{draft_id}"]
+    assert "POST" in route_methods["/replies/classify-unclassified"]
 
 
 def test_uploaded_csv_is_saved_to_media(monkeypatch, tmp_path) -> None:
@@ -129,7 +184,9 @@ def test_slack_log_notification_item_includes_related_lead() -> None:
 
 
 def test_interested_reply_notification_item_is_frontend_friendly(monkeypatch) -> None:
-    monkeypatch.setattr("sales_automation.api.main.settings.gmail_sender_email", "sales@example.com")
+    monkeypatch.setattr(
+        "sales_automation.api.main.settings.gmail_sender_email", "sales@example.com"
+    )
     received_at = datetime(2026, 6, 18, 11, 0, tzinfo=UTC)
     reply = SimpleNamespace(
         id=7,
@@ -158,7 +215,10 @@ def test_interested_reply_notification_item_is_frontend_friendly(monkeypatch) ->
 
     assert item.type == "email_reply"
     assert item.category == "interested_reply"
-    assert item.title == "Sahil Kumar (Aether AI) replied with classification: Interested: Re: Aether AI Growth"
+    assert (
+        item.title
+        == "Sahil Kumar (Aether AI) replied with classification: Interested: Re: Aether AI Growth"
+    )
     assert item.content == "Yes, I am interested."
     assert item.preview == "Yes, I am interested."
     assert item.badge_label == "Interested Reply"
@@ -410,7 +470,9 @@ def test_reply_api_read_model_corrects_stale_not_interested_positive_reply(monke
     assert response.status_label == "Interested"
 
 
-def test_reply_api_read_model_corrects_display_variant_not_interested_positive_reply(monkeypatch) -> None:
+def test_reply_api_read_model_corrects_display_variant_not_interested_positive_reply(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr("sales_automation.api.main.settings.gmail_sender_email", None)
     now = datetime(2026, 6, 18, 10, 0, tzinfo=UTC)
     reply = SimpleNamespace(
@@ -526,7 +588,9 @@ def test_sent_conversation_includes_draft_replies_and_sent_followups(monkeypatch
         "sales_automation.api.main.EmailSentMessageRepository",
         FakeSentMessageRepository,
     )
-    monkeypatch.setattr("sales_automation.api.main.settings.gmail_sender_email", "sales@example.com")
+    monkeypatch.setattr(
+        "sales_automation.api.main.settings.gmail_sender_email", "sales@example.com"
+    )
 
     conversation = _sent_conversation_for_draft(object(), draft)  # type: ignore[arg-type]
 

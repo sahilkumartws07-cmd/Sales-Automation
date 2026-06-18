@@ -33,7 +33,6 @@ from sales_automation.api.schemas import (
     AuthUserResult,
     ClassifyRepliesRequest,
     DraftActionRequest,
-    DraftListRequest,
     EmailDraftRead,
     EmailGenResult,
     EmailReplyRead,
@@ -42,7 +41,6 @@ from sales_automation.api.schemas import (
     HealthCheck,
     ImportResult,
     LeadDetailRead,
-    LeadListRequest,
     LeadRead,
     LoginRequest,
     LoginResult,
@@ -51,15 +49,13 @@ from sales_automation.api.schemas import (
     NotificationFilterRead,
     NotificationItemRead,
     NotificationLeadRead,
-    NotificationListRequest,
     NotificationListResult,
     NotificationSummaryRead,
     NotificationThreadRead,
-    RegisterRequest,
     RefreshTokenRequest,
     RefreshTokenResult,
+    RegisterRequest,
     ReplyClassifyResult,
-    ReplyListRequest,
     ReplyResponseRequest,
     ReplySendResult,
     ResearchRequest,
@@ -69,10 +65,8 @@ from sales_automation.api.schemas import (
     ScoreResult,
     SentConversationMessageRead,
     SentConversationRead,
-    SentListRequest,
     SheetAppendResult,
     VerifyOTPRequest,
-    WorkflowLogListRequest,
     WorkflowLogRead,
 )
 from sales_automation.config import get_settings
@@ -119,7 +113,9 @@ ColdEmailGenerationService = _LazyFactory(
 GoogleSheetsLoggingService = _LazyFactory(
     "sales_automation.services.google_sheets_logging", "GoogleSheetsLoggingService"
 )
-AILeadScoringService = _LazyFactory("sales_automation.services.lead_scoring", "AILeadScoringService")
+AILeadScoringService = _LazyFactory(
+    "sales_automation.services.lead_scoring", "AILeadScoringService"
+)
 OpenAIService = _LazyFactory("sales_automation.services.openai_service", "OpenAIService")
 ReplyClassificationService = _LazyFactory(
     "sales_automation.services.reply_classification", "ReplyClassificationService"
@@ -136,6 +132,7 @@ def clean_reply_body(value: str) -> str:
     from sales_automation.services.gmail_service import clean_reply_body as _clean_reply_body
 
     return _clean_reply_body(value)
+
 
 app = FastAPI(
     title="Sales Automation API",
@@ -261,7 +258,7 @@ def _detail_errors(detail: Any) -> list[dict[str, Any]]:
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/health", response_model=HealthCheck)
+@app.get("/health", response_model=HealthCheck)
 def health_check() -> HealthCheck:
     try:
         with SessionLocal() as session:
@@ -421,15 +418,17 @@ def reset_password(
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/leads", response_model=list[LeadRead], dependencies=AUTH_REQUIRED)
+@app.get("/leads", response_model=list[LeadRead], dependencies=AUTH_REQUIRED)
 def list_leads(
-    body: LeadListRequest = LeadListRequest(),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[LeadRead]:
     query = db.query(Lead)
-    if body.status:
-        query = query.filter(Lead.status == body.status)
-    leads = query.order_by(Lead.created_at.desc()).limit(body.limit).offset(body.offset).all()
+    if status:
+        query = query.filter(Lead.status == status)
+    leads = query.order_by(Lead.created_at.desc()).limit(limit).offset(offset).all()
     return leads
 
 
@@ -526,7 +525,7 @@ def _lead_scoring_message(scored: int, skipped: int, failed: int) -> str:
     return "No researched leads available for scoring."
 
 
-@app.post("/leads/{lead_id}", response_model=LeadDetailRead, dependencies=AUTH_REQUIRED)
+@app.get("/leads/{lead_id}", response_model=LeadDetailRead, dependencies=AUTH_REQUIRED)
 def get_lead(lead_id: int, db: Session = Depends(get_db)) -> LeadDetailRead:
     lead = db.get(Lead, lead_id)
     if lead is None:
@@ -709,13 +708,13 @@ def generate_emails(
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/drafts/pending", dependencies=AUTH_REQUIRED)
+@app.get("/drafts/pending", dependencies=AUTH_REQUIRED)
 def list_pending_drafts(
-    body: DraftListRequest = DraftListRequest(),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     service = EmailApprovalService(db)
-    drafts = service.list_pending(limit=body.limit)
+    drafts = service.list_pending(limit=limit)
     return [
         {
             "id": d.id,
@@ -740,7 +739,7 @@ def _log_sheet_after_send(session_factory: Any, lead_id: int) -> None:
         )
 
 
-@app.post("/drafts/{draft_id}", response_model=dict[str, Any], dependencies=AUTH_REQUIRED)
+@app.put("/drafts/{draft_id}", response_model=dict[str, Any], dependencies=AUTH_REQUIRED)
 def draft_action(
     draft_id: int,
     background_tasks: BackgroundTasks,
@@ -800,17 +799,19 @@ def draft_action(
     raise HTTPException(status_code=400, detail="Invalid action. Use: approve, reject, or edit")
 
 
-@app.post("/drafts", response_model=list[EmailDraftRead], dependencies=AUTH_REQUIRED)
+@app.get("/drafts", response_model=list[EmailDraftRead], dependencies=AUTH_REQUIRED)
 def list_drafts(
-    body: DraftListRequest = DraftListRequest(),
+    lead_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[EmailDraftRead]:
     query = db.query(EmailDraftRepository.model)
-    if body.lead_id:
-        query = query.filter(EmailDraftRepository.model.lead_id == body.lead_id)
-    if body.status:
-        query = query.filter(EmailDraftRepository.model.status == body.status)
-    return query.order_by(EmailDraftRepository.model.created_at.desc()).limit(body.limit).all()
+    if lead_id:
+        query = query.filter(EmailDraftRepository.model.lead_id == lead_id)
+    if status:
+        query = query.filter(EmailDraftRepository.model.status == status)
+    return query.order_by(EmailDraftRepository.model.created_at.desc()).limit(limit).all()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -818,15 +819,16 @@ def list_drafts(
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/sent", response_model=list[SentConversationRead], dependencies=AUTH_REQUIRED)
+@app.get("/sent", response_model=list[SentConversationRead], dependencies=AUTH_REQUIRED)
 def list_sent_conversations(
-    body: SentListRequest = SentListRequest(),
+    lead_id: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[SentConversationRead]:
     query = db.query(EmailDraftRepository.model).filter(EmailDraftRepository.model.status == "sent")
-    if body.lead_id:
-        query = query.filter(EmailDraftRepository.model.lead_id == body.lead_id)
-    drafts = query.order_by(EmailDraftRepository.model.updated_at.desc()).limit(body.limit).all()
+    if lead_id:
+        query = query.filter(EmailDraftRepository.model.lead_id == lead_id)
+    drafts = query.order_by(EmailDraftRepository.model.updated_at.desc()).limit(limit).all()
     if not drafts:
         return []
 
@@ -840,7 +842,10 @@ def list_sent_conversations(
     sent_by_draft = _group_by_email_draft_id(
         db.query(EmailSentMessageRepository.model)
         .filter(EmailSentMessageRepository.model.email_draft_id.in_(draft_ids))
-        .order_by(EmailSentMessageRepository.model.sent_at.asc(), EmailSentMessageRepository.model.id.asc())
+        .order_by(
+            EmailSentMessageRepository.model.sent_at.asc(),
+            EmailSentMessageRepository.model.id.asc(),
+        )
         .all()
     )
     conversations = [
@@ -863,7 +868,9 @@ def _sent_conversation_for_draft(
     sent_messages: list[Any] | None = None,
 ) -> SentConversationRead:
     lead = draft.lead
-    draft_sent_at = _safe_datetime(getattr(draft, "updated_at", None), getattr(draft, "created_at", None))
+    draft_sent_at = _safe_datetime(
+        getattr(draft, "updated_at", None), getattr(draft, "created_at", None)
+    )
     messages: list[SentConversationMessageRead] = [
         SentConversationMessageRead(
             id=f"draft-{draft.id}",
@@ -893,7 +900,9 @@ def _sent_conversation_for_draft(
             gmail_message_id=reply.gmail_message_id,
             gmail_thread_id=reply.gmail_thread_id,
         )
-        for reply in (replies if replies is not None else EmailReplyRepository(db).list_for_draft(draft.id))
+        for reply in (
+            replies if replies is not None else EmailReplyRepository(db).list_for_draft(draft.id)
+        )
     )
     messages.extend(
         SentConversationMessageRead(
@@ -1023,16 +1032,18 @@ def _reply_classification_message(classified: int, skipped: int, failed: int) ->
     return "No replies available for classification."
 
 
-@app.post("/replies", response_model=list[EmailReplyRead], dependencies=AUTH_REQUIRED)
+@app.get("/replies", response_model=list[EmailReplyRead], dependencies=AUTH_REQUIRED)
 def list_replies(
-    body: ReplyListRequest = ReplyListRequest(),
+    lead_id: int | None = Query(default=None),
+    sentiment: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[EmailReplyRead]:
     query = db.query(EmailReplyRepository.model)
-    if body.lead_id:
-        query = query.filter(EmailReplyRepository.model.lead_id == body.lead_id)
-    if body.sentiment:
-        requested_sentiment = _canonical_reply_sentiment(body.sentiment)
+    if lead_id:
+        query = query.filter(EmailReplyRepository.model.lead_id == lead_id)
+    if sentiment:
+        requested_sentiment = _canonical_reply_sentiment(sentiment)
         if requested_sentiment == "INTERESTED":
             query = query.filter(
                 or_(
@@ -1047,15 +1058,17 @@ def list_replies(
             query = query.filter(
                 or_(
                     and_(
-                        EmailReplyRepository.model.sentiment.in_(_sentiment_variants("NOT_INTERESTED")),
+                        EmailReplyRepository.model.sentiment.in_(
+                            _sentiment_variants("NOT_INTERESTED")
+                        ),
                         not_(_positive_reply_body_filter(EmailReplyRepository.model)),
                     ),
                     _negative_reply_body_filter(EmailReplyRepository.model),
                 )
             )
         else:
-            query = query.filter(EmailReplyRepository.model.sentiment == body.sentiment)
-    replies = query.order_by(EmailReplyRepository.model.received_at.desc()).limit(body.limit).all()
+            query = query.filter(EmailReplyRepository.model.sentiment == sentiment)
+    replies = query.order_by(EmailReplyRepository.model.received_at.desc()).limit(limit).all()
     response = [_reply_to_read(reply) for reply in replies]
     if _repair_reply_sentiments(replies, response):
         db.commit()
@@ -1419,18 +1432,21 @@ def test_slack_notification() -> dict[str, str]:
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/notifications", response_model=NotificationListResult, dependencies=AUTH_REQUIRED)
+@app.get("/notifications", response_model=NotificationListResult, dependencies=AUTH_REQUIRED)
 def list_notifications(
-    body: NotificationListRequest = NotificationListRequest(),
+    limit: int = Query(default=100, ge=1, le=100),
+    include_slack: bool = Query(default=True),
+    include_interested_replies: bool = Query(default=True),
+    include_system_warnings: bool = Query(default=True),
     db: Session = Depends(get_db),
 ) -> NotificationListResult:
-    limit = min(body.limit, API_RECORD_LIMIT)
+    limit = min(limit, API_RECORD_LIMIT)
     notifications: list[NotificationItemRead] = []
-    if body.include_slack:
+    if include_slack:
         notifications.extend(_slack_notification_items(db, limit=limit))
-    if body.include_interested_replies:
+    if include_interested_replies:
         notifications.extend(_interested_reply_items(db, limit=limit))
-    if body.include_system_warnings:
+    if include_system_warnings:
         notifications.extend(_system_warning_items(db, limit=limit))
 
     notifications = sorted(
@@ -1565,7 +1581,10 @@ def _interested_reply_to_notification(reply: Any) -> NotificationItemRead:
         category="interested_reply",
         event_type="email_reply.interested",
         lead=lead,
-        payload={"subject": getattr(reply, "subject", None), "sender_email": getattr(reply, "from_email", None)},
+        payload={
+            "subject": getattr(reply, "subject", None),
+            "sender_email": getattr(reply, "from_email", None),
+        },
     )
     return NotificationItemRead(
         id=f"email-reply-{reply.id}",
@@ -1869,17 +1888,19 @@ def _humanize_event_type(event_type: str) -> str:
 # ──────────────────────────────────────────────────────────────
 
 
-@app.post("/logs", response_model=list[WorkflowLogRead], dependencies=AUTH_REQUIRED)
+@app.get("/logs", response_model=list[WorkflowLogRead], dependencies=AUTH_REQUIRED)
 def list_workflow_logs(
-    body: WorkflowLogListRequest = WorkflowLogListRequest(),
+    lead_id: int | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[WorkflowLogRead]:
     query = db.query(WorkflowLogRepository.model)
-    if body.lead_id:
-        query = query.filter(WorkflowLogRepository.model.lead_id == body.lead_id)
-    if body.event_type:
-        query = query.filter(WorkflowLogRepository.model.event_type == body.event_type)
-    return query.order_by(WorkflowLogRepository.model.created_at.desc()).limit(body.limit).all()
+    if lead_id:
+        query = query.filter(WorkflowLogRepository.model.lead_id == lead_id)
+    if event_type:
+        query = query.filter(WorkflowLogRepository.model.event_type == event_type)
+    return query.order_by(WorkflowLogRepository.model.created_at.desc()).limit(limit).all()
 
 
 def run(host: str = "127.0.0.1", port: int = 8000) -> None:
