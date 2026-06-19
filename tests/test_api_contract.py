@@ -19,12 +19,15 @@ from sales_automation.api.main import (
     classify_replies,
     draft_action,
     respond_to_reply,
+    score_leads,
 )
 from sales_automation.api.schemas import (
     ClassifyRepliesRequest,
     DraftActionRequest,
     ReplyResponseRequest,
+    ScoreRequest,
 )
+from sales_automation.services.lead_scoring import LeadScoringResult
 from sales_automation.services.reply_classification import ReplyClassificationResult
 
 
@@ -118,6 +121,52 @@ def test_website_research_message_reports_failures_and_timeouts() -> None:
         )
         == "Website research stopped at the API time limit. Call this endpoint again for more leads."
     )
+
+
+def test_score_leads_returns_false_when_no_leads_available(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeLeadScoringService:
+        def __init__(self, db: object, openai_service: object | None = None) -> None:
+            calls.append({"method": "init", "db": db, "has_openai_service": openai_service is not None})
+
+        def score_unscored_leads(
+            self,
+            *,
+            limit: int,
+            max_seconds: float | None = None,
+        ) -> LeadScoringResult:
+            calls.append({"method": "score", "limit": limit, "max_seconds": max_seconds})
+            return LeadScoringResult(
+                scored=0,
+                skipped=0,
+                failed=0,
+                errors=[],
+                status=False,
+                message="No leads are available for scoring.",
+            )
+
+    class FakeDb:
+        def commit(self) -> None:
+            calls.append({"method": "commit"})
+
+    db = FakeDb()
+    monkeypatch.setattr("sales_automation.api.main.AILeadScoringService", FakeLeadScoringService)
+
+    response = score_leads(body=ScoreRequest(limit=10), db=db)  # type: ignore[arg-type]
+
+    assert response.model_dump() == {
+        "status": False,
+        "scored": 0,
+        "skipped": 0,
+        "failed": 0,
+        "message": "No leads are available for scoring.",
+    }
+    assert calls == [
+        {"method": "init", "db": db, "has_openai_service": True},
+        {"method": "score", "limit": 10, "max_seconds": 45},
+        {"method": "commit"},
+    ]
 
 
 def test_slack_log_notification_item_includes_related_lead() -> None:

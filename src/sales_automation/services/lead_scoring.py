@@ -26,6 +26,8 @@ class LeadScoringResult:
     skipped: int
     failed: int
     errors: list[dict[str, Any]]
+    status: bool = True
+    message: str | None = None
 
 
 class AILeadScoringService:
@@ -49,6 +51,15 @@ class AILeadScoringService:
         errors: list[dict[str, Any]] = []
         started_at = monotonic()
         leads = self.scores.list_researched_unscored_leads(limit=limit)
+        if not leads:
+            return LeadScoringResult(
+                scored=0,
+                skipped=0,
+                failed=0,
+                errors=[],
+                status=False,
+                message="No leads are available for scoring.",
+            )
 
         self.logs.record(
             event_type="lead_scoring.batch_started",
@@ -93,7 +104,13 @@ class AILeadScoringService:
             payload={"scored": scored, "skipped": skipped, "failed": failed},
         )
         self.session.commit()
-        return LeadScoringResult(scored=scored, skipped=skipped, failed=failed, errors=errors)
+        return LeadScoringResult(
+            scored=scored,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+            status=True,
+        )
 
     def score_lead(self, lead_id: int) -> LeadScore:
         lead = self.leads.get(lead_id)

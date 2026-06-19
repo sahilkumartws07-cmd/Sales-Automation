@@ -505,11 +505,11 @@ def score_leads(
     result = service.score_unscored_leads(limit=effective_limit, max_seconds=API_AI_MAX_SECONDS)
     db.commit()
     return ScoreResult(
-        status="success" if result.failed == 0 else "partial_success",
+        status=result.status,
         scored=result.scored,
         skipped=result.skipped,
         failed=result.failed,
-        message=_lead_scoring_message(result.scored, result.skipped, result.failed),
+        message=result.message or _lead_scoring_message(result.scored, result.skipped, result.failed),
     )
 
 

@@ -514,7 +514,7 @@ class ResearchResult(BaseModel):
 
 
 class ScoreResult(BaseModel):
-    status: str = "success"
+    status: bool = True
     scored: int
     skipped: int
     failed: int

@@ -140,7 +140,13 @@ def score_leads(*, limit: int) -> None:
         result = AILeadScoringService(session).score_unscored_leads(limit=limit)
         logger.info(
             "lead_scoring_batch_completed",
-            extra={"scored": result.scored, "skipped": result.skipped, "failed": result.failed},
+            extra={
+                "status": result.status,
+                "message": result.message,
+                "scored": result.scored,
+                "skipped": result.skipped,
+                "failed": result.failed,
+            },
         )
 
 
