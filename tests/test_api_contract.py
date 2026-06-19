@@ -123,6 +123,10 @@ def test_website_research_message_reports_failures_and_timeouts() -> None:
     )
 
 
+def test_classify_replies_default_limit_is_ten() -> None:
+    assert ClassifyRepliesRequest().limit == 10
+
+
 def test_score_leads_returns_false_when_no_leads_available(monkeypatch) -> None:
     calls: list[dict[str, object]] = []
 

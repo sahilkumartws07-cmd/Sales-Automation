@@ -348,7 +348,7 @@ class DraftActionRequest(BaseModel):
 
 class ClassifyRepliesRequest(BaseModel):
     query: str = Field(default="is:unread")
-    limit: int = Field(default=100, ge=1, le=100)
+    limit: int = Field(default=10, ge=1, le=100)
     notify_slack: bool = Field(default=True)
 
 
